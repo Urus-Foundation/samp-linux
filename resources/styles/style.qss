@@ -16,7 +16,7 @@ QMainWindow {
 }
 
 #HeaderBar {
-    background-color: #222222;
+    background-color: #1e1e1e;
     border-bottom: 1px solid #333333;
 }
 

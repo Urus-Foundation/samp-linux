@@ -24,6 +24,9 @@
 #include <QCloseEvent>
 #include <QTimer>
 #include <QProcess>
+#include <QApplication>
+#include <QClipboard>
+#include <QFormLayout>
 
 #include "serverlistmodel.h"
 #include "sampquery.h"
@@ -181,6 +184,8 @@ QWidget *MainWindow::buildInternetTab()
     connect(m_internetView, &QTableView::doubleClicked, this, [this](const QModelIndex &) {
         connectToInternetSelection();
     });
+    m_internetView->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(m_internetView, &QTableView::customContextMenuRequested, this, &MainWindow::onInternetContextMenu);
 
     layout->addWidget(m_internetView, 1);
 
@@ -247,6 +252,8 @@ QWidget *MainWindow::buildFavoritesTab()
     connect(m_favoritesView, &QTableView::doubleClicked, this, [this](const QModelIndex &) {
         connectToFavoriteSelection();
     });
+    m_favoritesView->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(m_favoritesView, &QTableView::customContextMenuRequested, this, &MainWindow::onFavoritesContextMenu);
 
     layout->addWidget(m_favoritesView, 1);
 
@@ -372,6 +379,55 @@ void MainWindow::requeryInternet()
 void MainWindow::requeryFavorites()
 {
     requeryVisibleServers(m_favoritesView, m_favoritesModel);
+}
+
+void MainWindow::onInternetContextMenu(const QPoint &pos)
+{
+    showServerContextMenu(m_internetView, m_internetModel, pos, false);
+}
+
+void MainWindow::onFavoritesContextMenu(const QPoint &pos)
+{
+    showServerContextMenu(m_favoritesView, m_favoritesModel, pos, true);
+}
+
+ServerInfo MainWindow::serverAt(QTableView *view, ServerListModel *model, const QPoint &pos) const
+{
+    const QModelIndex proxyIndex = view->indexAt(pos);
+    if (!proxyIndex.isValid())
+        return ServerInfo();
+
+    auto *proxy = qobject_cast<QSortFilterProxyModel *>(view->model());
+    const QModelIndex sourceIndex = proxy ? proxy->mapToSource(proxyIndex) : proxyIndex;
+    return model->at(sourceIndex.row());
+}
+
+void MainWindow::showServerContextMenu(QTableView *view, ServerListModel *model, const QPoint &pos, bool isFavorite)
+{
+    const ServerInfo info = serverAt(view, model, pos);
+    if (info.address.isEmpty())
+        return;
+
+    QMenu menu(this);
+    menu.addAction(tr("Connect"), [this, info] {
+        connectServer(info);
+    });
+    menu.addAction(tr("Add to Favorites"), [this, info] {
+        addServerToFavorites(info);
+    });
+    menu.addAction(tr("Server Details"), [this, info] {
+        showServerDetails(info);
+    });
+    menu.addAction(tr("Copy Server Info"), [this, info] {
+        copyServerInfo(info);
+    });
+    if (isFavorite) {
+        menu.addSeparator();
+        menu.addAction(tr("Remove from Favorites"), [this, info] {
+            removeServerFromFavorites(info);
+        });
+    }
+    menu.exec(view->viewport()->mapToGlobal(pos));
 }
 
 void MainWindow::onQueryResult(ServerInfo info)
@@ -548,6 +604,90 @@ void MainWindow::removeSelectedFavorite()
 
     m_favoritesManager->removeFavorite(info.address, info.port);
     reloadFavoritesModel();
+}
+
+void MainWindow::addServerToFavorites(const ServerInfo &info)
+{
+    if (info.address.isEmpty())
+        return;
+    m_favoritesManager->addFavorite(info);
+    reloadFavoritesModel();
+    statusBar()->showMessage(tr("Added %1 to Favorites.").arg(info.hostname.isEmpty() ? info.displayAddress() : info.hostname), 4000);
+}
+
+void MainWindow::removeServerFromFavorites(const ServerInfo &info)
+{
+    if (info.address.isEmpty())
+        return;
+    m_favoritesManager->removeFavorite(info.address, info.port);
+    reloadFavoritesModel();
+    statusBar()->showMessage(tr("Removed %1 from Favorites.").arg(info.hostname.isEmpty() ? info.displayAddress() : info.hostname), 4000);
+}
+
+void MainWindow::showServerDetails(const ServerInfo &info)
+{
+    if (info.address.isEmpty())
+        return;
+
+    QDialog dlg(this);
+    dlg.setWindowTitle(tr("Server Details - %1").arg(info.hostname.isEmpty() ? info.displayAddress() : info.hostname));
+    dlg.setMinimumWidth(420);
+
+    auto *layout = new QVBoxLayout(&dlg);
+    auto *form = new QFormLayout();
+    form->setLabelAlignment(Qt::AlignLeft);
+
+    auto addRow = [form, this](const QString &labelText, const QString &value) {
+        auto *label = new QLabel(labelText, this);
+        label->setStyleSheet("font-weight: 600;");
+        form->addRow(label, new QLabel(value, this));
+    };
+
+    addRow(tr("Address:"), info.displayAddress());
+    addRow(tr("Server Name:"), info.hostname.isEmpty() ? tr("unknown") : info.hostname);
+    addRow(tr("Gamemode:"), info.gamemode.isEmpty() ? tr("unknown") : info.gamemode);
+    addRow(tr("Language:"), info.language.isEmpty() ? tr("unknown") : info.language);
+    addRow(tr("Players:"), info.queried && info.online ? QString("%1 / %2").arg(info.players).arg(info.maxPlayers) : tr("unknown"));
+    addRow(tr("Ping:"), (info.queried && info.online && info.pingMs >= 0) ? QString("%1 ms").arg(info.pingMs) : tr("unknown"));
+    addRow(tr("Online:"), info.online ? tr("Yes") : tr("No"));
+    addRow(tr("Passworded:"), info.passworded ? tr("Yes") : tr("No"));
+    addRow(tr("Queried:"), info.queried ? tr("Yes") : tr("No"));
+
+    layout->addLayout(form);
+
+    auto *buttonRow = new QHBoxLayout();
+    auto *copyBtn = new QPushButton(tr("Copy Server Info"), &dlg);
+    auto *closeBtn = new QPushButton(tr("Close"), &dlg);
+    buttonRow->addWidget(copyBtn);
+    buttonRow->addStretch(1);
+    buttonRow->addWidget(closeBtn);
+    layout->addLayout(buttonRow);
+
+    connect(copyBtn, &QPushButton::clicked, this, [this, info] {
+        copyServerInfo(info);
+    });
+    connect(closeBtn, &QPushButton::clicked, &dlg, &QDialog::accept);
+
+    dlg.exec();
+}
+
+void MainWindow::copyServerInfo(const ServerInfo &info) const
+{
+    if (info.address.isEmpty())
+        return;
+
+    const QString text = tr("Name: %1\nAddress: %2\nGamemode: %3\nLanguage: %4\nPlayers: %5/%6\nPing: %7 ms\nPassworded: %8")
+        .arg(info.hostname.isEmpty() ? tr("unknown") : info.hostname)
+        .arg(info.displayAddress())
+        .arg(info.gamemode.isEmpty() ? tr("unknown") : info.gamemode)
+        .arg(info.language.isEmpty() ? tr("unknown") : info.language)
+        .arg(info.players)
+        .arg(info.maxPlayers)
+        .arg(info.pingMs >= 0 ? QString::number(info.pingMs) : tr("unknown"))
+        .arg(info.passworded ? tr("Yes") : tr("No"));
+
+    QApplication::clipboard()->setText(text);
+    statusBar()->showMessage(tr("Server info copied."), 3000);
 }
 
 // ---------------------------------------------------------------------

@@ -43,7 +43,7 @@ ServerPropertiesDialog::ServerPropertiesDialog(const ServerInfo &info, QWidget *
                                 ? QString("%1 / %2").arg(info.players).arg(info.maxPlayers)
                                 : tr("unknown"));
     addRow(tr("Ping:"), (info.queried && info.online && info.pingMs >= 0)
-                             ? QString("%1").arg(info.pingMs)
+                             ? QString("%1 ms").arg(info.pingMs)
                              : tr("unknown"));
     addRow(tr("Mode:"), info.gamemode.isEmpty() ? tr("unknown") : info.gamemode);
     addRow(tr("Language:"), info.language.isEmpty() ? tr("unknown") : info.language);

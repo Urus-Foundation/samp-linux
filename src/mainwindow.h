@@ -33,6 +33,8 @@ private slots:
     void onPingTimerTick();
 
     void onQueryResult(ServerInfo info);
+    void onInternetContextMenu(const QPoint &pos);
+    void onFavoritesContextMenu(const QPoint &pos);
 
     void requeryVisibleServers(QTableView *view, ServerListModel *model);
     void requeryInternet();
@@ -88,6 +90,12 @@ private:
     void reloadFavoritesModel();
 
     ServerInfo selectedServer(QTableView *view, ServerListModel *model) const;
+    ServerInfo serverAt(QTableView *view, ServerListModel *model, const QPoint &pos) const;
+    void showServerContextMenu(QTableView *view, ServerListModel *model, const QPoint &pos, bool isFavorite);
+    void addServerToFavorites(const ServerInfo &info);
+    void removeServerFromFavorites(const ServerInfo &info);
+    void showServerDetails(const ServerInfo &info);
+    void copyServerInfo(const ServerInfo &info) const;
     bool isProcessRunning(qint64 pid) const;
     void applyServerCache(QVector<ServerInfo> *servers) const;
     void updateServerEntry(ServerListModel *model, const ServerInfo &info) const;
