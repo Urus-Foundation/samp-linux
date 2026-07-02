@@ -1,4 +1,5 @@
 #include "mainwindow.h"
+#include "qutils.h"
 
 #include <QTabWidget>
 #include <QTableView>
@@ -668,6 +669,7 @@ void MainWindow::showServerDetails(const ServerInfo &info)
     });
     connect(closeBtn, &QPushButton::clicked, &dlg, &QDialog::accept);
 
+    disableWindowMaximizeButton(&dlg);
     dlg.exec();
 }
 

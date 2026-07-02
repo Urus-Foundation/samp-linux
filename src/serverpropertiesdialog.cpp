@@ -1,4 +1,5 @@
 #include "serverpropertiesdialog.h"
+#include "qutils.h"
 
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -88,6 +89,8 @@ ServerPropertiesDialog::ServerPropertiesDialog(const ServerInfo &info, QWidget *
     connect(cancelBtn, &QPushButton::clicked, this, &QDialog::reject);
 
     m_serverPasswordEdit->setFocus();
+
+    disableWindowMaximizeButton(this);
 }
 
 void ServerPropertiesDialog::onConnectClicked()

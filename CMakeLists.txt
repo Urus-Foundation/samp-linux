@@ -34,6 +34,7 @@ qt_add_executable(samp-linux
     src/serverpropertiesdialog.cpp
     src/launcher.h
     src/launcher.cpp
+    src/qutils.cpp
     resources/resources.qrc
 )
 
