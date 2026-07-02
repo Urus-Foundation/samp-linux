@@ -2,6 +2,7 @@
 #include <QFont>
 #include <QColor>
 #include <QIcon>
+#include <QVariant>
 
 ServerListModel::ServerListModel(QObject *parent)
     : QAbstractTableModel(parent)
@@ -49,6 +50,25 @@ QVariant ServerListModel::data(const QModelIndex &index, int role) const
             if (!s.online || s.pingMs < 0)
                 return QStringLiteral("-");
             return QString::number(s.pingMs) + " ms";
+        case ColAddress:
+            return s.displayAddress();
+        default:
+            return QVariant();
+        }
+    }
+
+    if (role == Qt::UserRole + 1) {
+        switch (index.column()) {
+        case ColLock:
+            return s.passworded;
+        case ColName:
+            return s.hostname.isEmpty() ? tr("(unknown)") : s.hostname;
+        case ColMode:
+            return s.gamemode;
+        case ColPlayers:
+            return (s.queried && s.online) ? QVariant::fromValue(qint64(s.players)) : QVariant::fromValue(qint64(-1));
+        case ColPing:
+            return (s.queried && s.online && s.pingMs >= 0) ? QVariant::fromValue(qint64(s.pingMs)) : QVariant::fromValue(qint64(-1));
         case ColAddress:
             return s.displayAddress();
         default:

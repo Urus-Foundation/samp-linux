@@ -2,6 +2,7 @@
 
 #include <QMainWindow>
 #include <QVector>
+#include <QHash>
 #include "serverinfo.h"
 
 class QTabWidget;
@@ -12,6 +13,7 @@ class QPushButton;
 class QSortFilterProxyModel;
 class QNetworkAccessManager;
 class QNetworkReply;
+class QTimer;
 
 class ServerListModel;
 class SampQuery;
@@ -28,6 +30,7 @@ public:
 private slots:
     void refreshInternetList();
     void onMasterListReply(QNetworkReply *reply);
+    void onPingTimerTick();
 
     void onQueryResult(ServerInfo info);
 
@@ -72,6 +75,9 @@ private:
     FavoritesManager *m_favoritesManager;
     Launcher *m_launcher;
     QNetworkAccessManager *m_netManager;
+    QTimer *m_pingTimer;
+    qint64 m_gamePid = 0;
+    QHash<QString, ServerInfo> m_serverCache;
 
     void buildUi();
     QWidget *buildInternetTab();
@@ -82,4 +88,7 @@ private:
     void reloadFavoritesModel();
 
     ServerInfo selectedServer(QTableView *view, ServerListModel *model) const;
+    bool isProcessRunning(qint64 pid) const;
+    void applyServerCache(QVector<ServerInfo> *servers) const;
+    void updateServerEntry(ServerListModel *model, const ServerInfo &info) const;
 };

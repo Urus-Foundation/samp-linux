@@ -51,6 +51,7 @@ void SampQuery::queryInfo(const QString &host, quint16 port)
         PendingQuery pq;
         pq.host = host;
         pq.port = port;
+        pq.address = direct;
         pq.elapsed.start();
         m_pending.insert(k, pq);
         m_socket->writeDatagram(buildPacket(direct, port, 'i'), direct, port);
@@ -89,6 +90,7 @@ void SampQuery::queryInfo(const QString &host, quint16 port)
         PendingQuery pq;
         pq.host = host;
         pq.port = port;
+        pq.address = resolved;
         pq.elapsed.start();
         m_pending.insert(k, pq);
         m_socket->writeDatagram(buildPacket(resolved, port, 'i'), resolved, port);
@@ -136,13 +138,21 @@ void SampQuery::onReadyRead()
         const QString gamemode = readPascalString();
         const QString language = readPascalString();
 
-        // Match against a pending request. We key by sender port primarily
-        // since address may differ slightly (IP vs resolved hostname).
+        // Match against a pending request using sender address + port so
+        // servers sharing the same port do not overwrite each other.
         QString foundKey;
         for (auto it = m_pending.constBegin(); it != m_pending.constEnd(); ++it) {
-            if (it.value().port == senderPort) {
+            if (it.value().port == senderPort && it.value().address == sender) {
                 foundKey = it.key();
                 break;
+            }
+        }
+        if (foundKey.isEmpty()) {
+            for (auto it = m_pending.constBegin(); it != m_pending.constEnd(); ++it) {
+                if (it.value().port == senderPort) {
+                    foundKey = it.key();
+                    break;
+                }
             }
         }
 

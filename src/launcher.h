@@ -20,6 +20,7 @@ public:
 
     struct LaunchResult {
         bool started = false;
+        qint64 pid = 0;
         QString error;
     };
 

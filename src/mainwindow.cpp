@@ -22,6 +22,8 @@
 #include <QStatusBar>
 #include <QSettings>
 #include <QCloseEvent>
+#include <QTimer>
+#include <QProcess>
 
 #include "serverlistmodel.h"
 #include "sampquery.h"
@@ -41,6 +43,7 @@ MainWindow::MainWindow(QWidget *parent)
     , m_favoritesManager(new FavoritesManager(this))
     , m_launcher(new Launcher(this))
     , m_netManager(new QNetworkAccessManager(this))
+    , m_pingTimer(new QTimer(this))
 {
     // Set the platform to XCB to avoid issues with Wayland on some systems
     qputenv("QT_QPA_PLATFORM", "xcb"); 
@@ -54,6 +57,8 @@ MainWindow::MainWindow(QWidget *parent)
 
     connect(m_query, &SampQuery::resultReady, this, &MainWindow::onQueryResult);
     connect(m_netManager, &QNetworkAccessManager::finished, this, &MainWindow::onMasterListReply);
+    connect(m_pingTimer, &QTimer::timeout, this, &MainWindow::onPingTimerTick);
+    m_pingTimer->start(3000);
 
     reloadFavoritesModel();
 
@@ -152,6 +157,8 @@ QWidget *MainWindow::buildInternetTab()
     m_internetProxy->setSourceModel(m_internetModel);
     m_internetProxy->setFilterCaseSensitivity(Qt::CaseInsensitive);
     m_internetProxy->setFilterKeyColumn(-1); // filter across all columns
+    m_internetProxy->setSortRole(Qt::UserRole + 1);
+    m_internetProxy->setDynamicSortFilter(true);
 
     m_internetView = new QTableView(tab);
     m_internetView->setModel(m_internetProxy);
@@ -160,9 +167,12 @@ QWidget *MainWindow::buildInternetTab()
     m_internetView->setEditTriggers(QAbstractItemView::NoEditTriggers);
     m_internetView->setAlternatingRowColors(true);
     m_internetView->setSortingEnabled(true);
+    m_internetView->setWordWrap(false);
+    m_internetView->setTextElideMode(Qt::ElideRight);
     m_internetView->horizontalHeader()->setStretchLastSection(false);
     m_internetView->horizontalHeader()->setSectionResizeMode(ServerListModel::ColName, QHeaderView::Stretch);
     m_internetView->horizontalHeader()->setSectionResizeMode(ServerListModel::ColLock, QHeaderView::ResizeToContents);
+    m_internetView->horizontalHeader()->setSectionResizeMode(ServerListModel::ColAddress, QHeaderView::ResizeToContents);
     m_internetView->verticalHeader()->setVisible(false);
     m_internetView->setColumnWidth(ServerListModel::ColMode, 160);
     m_internetView->setColumnWidth(ServerListModel::ColPlayers, 90);
@@ -218,6 +228,8 @@ QWidget *MainWindow::buildFavoritesTab()
     m_favoritesProxy->setSourceModel(m_favoritesModel);
     m_favoritesProxy->setFilterCaseSensitivity(Qt::CaseInsensitive);
     m_favoritesProxy->setFilterKeyColumn(-1);
+    m_favoritesProxy->setSortRole(Qt::UserRole + 1);
+    m_favoritesProxy->setDynamicSortFilter(true);
 
     m_favoritesView = new QTableView(tab);
     m_favoritesView->setModel(m_favoritesProxy);
@@ -226,8 +238,11 @@ QWidget *MainWindow::buildFavoritesTab()
     m_favoritesView->setEditTriggers(QAbstractItemView::NoEditTriggers);
     m_favoritesView->setAlternatingRowColors(true);
     m_favoritesView->setSortingEnabled(true);
+    m_favoritesView->setWordWrap(false);
+    m_favoritesView->setTextElideMode(Qt::ElideRight);
     m_favoritesView->horizontalHeader()->setSectionResizeMode(ServerListModel::ColName, QHeaderView::Stretch);
     m_favoritesView->horizontalHeader()->setSectionResizeMode(ServerListModel::ColLock, QHeaderView::ResizeToContents);
+    m_favoritesView->horizontalHeader()->setSectionResizeMode(ServerListModel::ColAddress, QHeaderView::ResizeToContents);
     m_favoritesView->verticalHeader()->setVisible(false);
     connect(m_favoritesView, &QTableView::doubleClicked, this, [this](const QModelIndex &) {
         connectToFavoriteSelection();
@@ -311,6 +326,10 @@ void MainWindow::onMasterListReply(QNetworkReply *reply)
         return;
     }
 
+    for (const ServerInfo &server : servers)
+        m_serverCache.insert(server.key(), server);
+
+    applyServerCache(&servers);
     m_internetModel->setServers(servers);
     m_internetStatusLabel->setText(tr("%1 servers loaded. Select one and click \"Ping All\" for live ping.")
                                         .arg(servers.size()));
@@ -323,6 +342,18 @@ void MainWindow::onMasterListReply(QNetworkReply *reply)
 // ---------------------------------------------------------------------
 // Live querying
 // ---------------------------------------------------------------------
+
+void MainWindow::onPingTimerTick()
+{
+    if (m_gamePid > 0) {
+        if (isProcessRunning(m_gamePid))
+            return;
+        m_gamePid = 0;
+    }
+
+    requeryVisibleServers(m_internetView, m_internetModel);
+    requeryVisibleServers(m_favoritesView, m_favoritesModel);
+}
 
 void MainWindow::requeryVisibleServers(QTableView *view, ServerListModel *model)
 {
@@ -345,11 +376,36 @@ void MainWindow::requeryFavorites()
 
 void MainWindow::onQueryResult(ServerInfo info)
 {
-    // Update whichever model(s) currently contain this server.
+    if (m_serverCache.contains(info.key())) {
+        const ServerInfo cached = m_serverCache.value(info.key());
+        if (info.address.isEmpty())
+            info.address = cached.address;
+        if (info.port == 0)
+            info.port = cached.port;
+        if (info.hostname.isEmpty())
+            info.hostname = cached.hostname;
+        if (info.gamemode.isEmpty())
+            info.gamemode = cached.gamemode;
+        if (info.language.isEmpty())
+            info.language = cached.language;
+        if (info.players == 0 && info.maxPlayers == 0 && cached.players > 0)
+            info.players = cached.players;
+        if (info.maxPlayers == 0 && cached.maxPlayers > 0)
+            info.maxPlayers = cached.maxPlayers;
+        if (!info.online && cached.online) {
+            info.online = true;
+            info.passworded = cached.passworded;
+            if (info.pingMs < 0 && cached.pingMs >= 0)
+                info.pingMs = cached.pingMs;
+        }
+    }
+
+    m_serverCache.insert(info.key(), info);
+
     if (m_internetModel->indexOfKey(info.key()) >= 0)
-        m_internetModel->upsertServer(info);
+        updateServerEntry(m_internetModel, info);
     if (m_favoritesModel->indexOfKey(info.key()) >= 0)
-        m_favoritesModel->upsertServer(info);
+        updateServerEntry(m_favoritesModel, info);
 }
 
 // ---------------------------------------------------------------------
@@ -422,6 +478,8 @@ void MainWindow::connectServer(const ServerInfo &info)
     }
 
     m_favoritesManager->pushRecent(info);
+    if (result.pid > 0)
+        m_gamePid = result.pid;
     statusBar()->showMessage(tr("Launching %1:%2 via Wine...").arg(info.address).arg(info.port), 5000);
 }
 
@@ -446,7 +504,11 @@ void MainWindow::connectToFavoriteSelection()
 
 void MainWindow::reloadFavoritesModel()
 {
-    m_favoritesModel->setServers(m_favoritesManager->favorites());
+    QVector<ServerInfo> favorites = m_favoritesManager->favorites();
+    for (const ServerInfo &server : favorites)
+        m_serverCache.insert(server.key(), server);
+    applyServerCache(&favorites);
+    m_favoritesModel->setServers(favorites);
     requeryFavorites();
 }
 
@@ -520,6 +582,8 @@ void MainWindow::openDirectConnect()
         return;
     }
     m_favoritesManager->pushRecent(info);
+    if (result.pid > 0)
+        m_gamePid = result.pid;
     statusBar()->showMessage(tr("Launching %1:%2 via Wine...").arg(info.address).arg(info.port), 5000);
 }
 
@@ -541,4 +605,81 @@ void MainWindow::onInternetFilterChanged(const QString &text)
 void MainWindow::onFavoritesFilterChanged(const QString &text)
 {
     m_favoritesProxy->setFilterFixedString(text);
+}
+
+void MainWindow::applyServerCache(QVector<ServerInfo> *servers) const
+{
+    if (!servers)
+        return;
+
+    for (ServerInfo &server : *servers) {
+        if (!m_serverCache.contains(server.key()))
+            continue;
+
+        const ServerInfo cached = m_serverCache.value(server.key());
+        if (server.hostname.isEmpty())
+            server.hostname = cached.hostname;
+        if (server.gamemode.isEmpty())
+            server.gamemode = cached.gamemode;
+        if (server.language.isEmpty())
+            server.language = cached.language;
+        if (server.address.isEmpty())
+            server.address = cached.address;
+        if (server.port == 0)
+            server.port = cached.port;
+        if (server.players == 0 && cached.players > 0)
+            server.players = cached.players;
+        if (server.maxPlayers == 0 && cached.maxPlayers > 0)
+            server.maxPlayers = cached.maxPlayers;
+        if (server.pingMs < 0 && cached.pingMs >= 0)
+            server.pingMs = cached.pingMs;
+        if (cached.online)
+            server.online = true;
+        server.queried = server.queried || cached.queried;
+        server.passworded = server.passworded || cached.passworded;
+    }
+}
+
+void MainWindow::updateServerEntry(ServerListModel *model, const ServerInfo &info) const
+{
+    if (!model)
+        return;
+
+    const int row = model->indexOfKey(info.key());
+    if (row < 0)
+        return;
+
+    ServerInfo merged = info;
+    if (m_serverCache.contains(info.key())) {
+        const ServerInfo cached = m_serverCache.value(info.key());
+        if (merged.hostname.isEmpty())
+            merged.hostname = cached.hostname;
+        if (merged.gamemode.isEmpty())
+            merged.gamemode = cached.gamemode;
+        if (merged.language.isEmpty())
+            merged.language = cached.language;
+        if (merged.address.isEmpty())
+            merged.address = cached.address;
+        if (merged.port == 0)
+            merged.port = cached.port;
+        if (merged.players == 0 && cached.players > 0)
+            merged.players = cached.players;
+        if (merged.maxPlayers == 0 && cached.maxPlayers > 0)
+            merged.maxPlayers = cached.maxPlayers;
+        if (merged.pingMs < 0 && cached.pingMs >= 0)
+            merged.pingMs = cached.pingMs;
+        if (merged.online && !cached.online)
+            merged.online = true;
+        merged.queried = true;
+    }
+
+    model->upsertServer(merged);
+}
+
+bool MainWindow::isProcessRunning(qint64 pid) const
+{
+    if (pid <= 0)
+        return false;
+    const int exitCode = QProcess::execute("kill", {"-0", QString::number(pid)});
+    return exitCode == 0;
 }

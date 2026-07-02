@@ -93,5 +93,6 @@ Launcher::LaunchResult Launcher::launch(const QString &ip,
     }
 
     result.started = true;
+    result.pid = pid;
     return result;
 }

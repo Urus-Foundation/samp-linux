@@ -38,6 +38,7 @@ private:
     struct PendingQuery {
         QString host;
         quint16 port = 0;
+        QHostAddress address;
         QElapsedTimer elapsed;
     };
 
