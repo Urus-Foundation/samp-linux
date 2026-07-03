@@ -373,6 +373,11 @@ void MainWindow::onMasterListReply(QNetworkReply *reply)
 // Ping timer / re-query
 // ---------------------------------------------------------------------------
 
+// Max number of times to re-query a server if it is offline.
+// This is to avoid ping timeout bug or the server being offline at the time of the query.
+// We want to give it a few chances to respond.
+#define PING_MAX_RETRIES 2
+
 void MainWindow::onPingTimerTick()
 {
     // Pause ping sweeps while the game is running to reduce noise.
@@ -388,18 +393,32 @@ void MainWindow::onPingTimerTick()
 
 void MainWindow::requeryTab(const ServerTabWidgets &tab)
 {
-    for (const ServerInfo &s : tab.model->all())
-        m_query->queryInfo(s.address, s.port);
+    for (const ServerInfo &s : tab.model->all()) {
+        int retry = 0;
+        while (!s.online && retry < PING_MAX_RETRIES) {
+            // If the server was previously offline, we want to re-query it
+            // even if it was already queried before. This is because the
+            // server may have come back online since the last query.
+            // or just timed out ping. The master list may not have the latest status,
+            // so we always re-query.
+            m_query->queryInfo(s.address, s.port);
+            retry++;
+        }
+    }
 }
 
 void MainWindow::requeryInternetTab()
 {
+    m_statusLabel->setText(tr("Pinging servers..."));
     requeryTab(m_internet);
+    m_statusLabel->clear();
 }
 
 void MainWindow::requeryFavoritesTab()
 {
+    m_statusLabel->setText(tr("Pinging servers..."));
     requeryTab(m_favorites);
+    m_statusLabel->clear();
 }
 
 // ---------------------------------------------------------------------------
