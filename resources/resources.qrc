@@ -6,5 +6,6 @@
     <qresource prefix="/icons">
         <file alias="samp-linux.png">icons/samp-linux.png</file>
         <file alias="lock.svg">icons/lock.svg</file>
+        <file alias="unlock.svg">icons/unlock.svg</file>
     </qresource>
 </RCC>

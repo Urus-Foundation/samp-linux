@@ -58,7 +58,7 @@ QVariant ServerListModel::data(const QModelIndex &index, int role) const
     // --- Icon ---------------------------------------------------------------
     case Qt::DecorationRole:
         if (col == ColLock)
-            return s.passworded ? QIcon(QStringLiteral(":/icons/lock.svg")) : QVariant();
+            return s.passworded ? QIcon(QStringLiteral(":/icons/lock.svg")) : QIcon(QStringLiteral(":/icons/unlock.svg"));
         return {};
 
     // --- Numeric sort key (Qt::UserRole + 1) --------------------------------
