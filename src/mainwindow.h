@@ -130,9 +130,10 @@ private:
     ServerTabWidgets  m_favorites;
 
     // Extra widgets only on the Internet tab
-    QLabel       *m_internetStatusLabel  = nullptr;
-    QPushButton  *m_internetRefreshBtn   = nullptr;
+    QPushButton  *m_internetRefreshBtn = nullptr;
+
 
     // Status bar
-    QLabel *m_statusBarLabel = nullptr;
+    QLabel *m_statusLabel = nullptr;  // Top
+    QLabel *m_statusBarLabel = nullptr;  // Down
 };

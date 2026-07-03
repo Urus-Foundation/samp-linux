@@ -98,7 +98,15 @@ void MainWindow::buildUi()
 
     setCentralWidget(central);
 
+    m_statusLabel = new QLabel(this);
     m_statusBarLabel = new QLabel(this);
+    m_statusBarLabel->setObjectName("MutedLabel");
+    m_statusLabel->setObjectName("MutedLabel");
+    // Set padding so its more good to read
+    m_statusLabel->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+    m_statusLabel->setStyleSheet("padding-left: 20px; padding-right: 20px;");
+
+    root->addWidget(m_statusLabel);
     statusBar()->addWidget(m_statusBarLabel);
 }
 
@@ -214,11 +222,6 @@ QWidget *MainWindow::buildInternetTab()
             this, &MainWindow::onInternetContextMenu);
 
     layout->addWidget(m_internet.view, 1);
-
-    m_internetStatusLabel = new QLabel(tab);
-    m_internetStatusLabel->setObjectName("MutedLabel");
-    layout->addWidget(m_internetStatusLabel);
-
     return tab;
 }
 
@@ -280,7 +283,7 @@ QWidget *MainWindow::buildFavoritesTab()
 void MainWindow::refreshInternetList()
 {
     m_internetRefreshBtn->setEnabled(false);
-    m_internetStatusLabel->setText(tr("Fetching server list..."));
+    m_statusLabel->setText(tr("Fetching server list..."));
 
     QNetworkRequest req{QUrl(QString::fromLatin1(kMasterListUrl))};
     req.setHeader(QNetworkRequest::UserAgentHeader,
@@ -294,7 +297,7 @@ void MainWindow::onMasterListReply(QNetworkReply *reply)
     m_internetRefreshBtn->setEnabled(true);
 
     if (reply->error() != QNetworkReply::NoError) {
-        m_internetStatusLabel->setText(
+        m_statusLabel->setText(
             tr("Could not fetch server list: %1").arg(reply->errorString()));
         return;
     }
@@ -303,7 +306,7 @@ void MainWindow::onMasterListReply(QNetworkReply *reply)
     const QJsonDocument doc = QJsonDocument::fromJson(reply->readAll(), &parseError);
 
     if (parseError.error != QJsonParseError::NoError || !doc.isArray()) {
-        m_internetStatusLabel->setText(tr("Server list response was not understood."));
+        m_statusLabel->setText(tr("Server list response was not understood."));
         return;
     }
 
@@ -349,7 +352,7 @@ void MainWindow::onMasterListReply(QNetworkReply *reply)
     }
 
     if (servers.isEmpty()) {
-        m_internetStatusLabel->setText(tr("Server list is empty or could not be parsed."));
+        m_statusLabel->setText(tr("Server list is empty or could not be parsed."));
         return;
     }
 
@@ -358,7 +361,7 @@ void MainWindow::onMasterListReply(QNetworkReply *reply)
 
     applyServerCache(&servers);
     m_internet.model->setServers(servers);
-    m_internetStatusLabel->setText(
+    m_statusLabel->setText(
         tr("%1 servers loaded. Select one and click \"Ping All\" for live ping.")
             .arg(servers.size()));
 
@@ -392,7 +395,6 @@ void MainWindow::requeryTab(const ServerTabWidgets &tab)
 void MainWindow::requeryInternetTab()
 {
     requeryTab(m_internet);
-    m_internetStatusLabel->setText(tr("Pinging servers..."));
 }
 
 void MainWindow::requeryFavoritesTab()
