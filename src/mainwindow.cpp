@@ -475,14 +475,20 @@ void MainWindow::showServerContextMenu(const ServerTabWidgets &tab,
 
     QMenu menu(this);
     menu.addAction(tr("Connect"),        [this, info] { connectServer(info); });
-    menu.addAction(tr("Add to Favorites"), [this, info] { addServerToFavorites(info); });
+
+    if (!isFavorite) {
+        menu.addAction(tr("Add to Favorites"), [this, info] { addServerToFavorites(info); });
+    }
+
     menu.addAction(tr("Server Details"),  [this, info] { showServerDetails(info); });
     menu.addAction(tr("Copy Server Info"), [this, info] { copyServerInfo(info); });
+
     if (isFavorite) {
         menu.addSeparator();
         menu.addAction(tr("Remove from Favorites"),
                        [this, info] { removeServerFromFavorites(info); });
     }
+
     menu.exec(tab.view->viewport()->mapToGlobal(pos));
 }
 
