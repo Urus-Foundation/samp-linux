@@ -6,7 +6,6 @@
 #include <QPushButton>
 #include <QDialogButtonBox>
 #include <QMessageBox>
-#include <QRegularExpressionValidator>
 
 DirectConnectDialog::DirectConnectDialog(QWidget *parent)
     : QDialog(parent)
@@ -14,8 +13,8 @@ DirectConnectDialog::DirectConnectDialog(QWidget *parent)
     setWindowTitle(tr("Direct Connect"));
     setMinimumWidth(360);
 
-    auto *mainLayout = new QVBoxLayout(this);
-    auto *form = new QFormLayout();
+    auto *layout = new QVBoxLayout(this);
+    auto *form   = new QFormLayout();
 
     m_addressEdit = new QLineEdit(this);
     m_addressEdit->setPlaceholderText(tr("127.0.0.1:7777"));
@@ -26,14 +25,14 @@ DirectConnectDialog::DirectConnectDialog(QWidget *parent)
     m_passwordEdit->setPlaceholderText(tr("(optional)"));
     form->addRow(tr("Password:"), m_passwordEdit);
 
-    mainLayout->addLayout(form);
+    layout->addLayout(form);
 
     auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
     buttons->button(QDialogButtonBox::Ok)->setText(tr("Connect"));
     buttons->button(QDialogButtonBox::Ok)->setObjectName("PrimaryButton");
     connect(buttons, &QDialogButtonBox::accepted, this, &DirectConnectDialog::validateAndAccept);
     connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
-    mainLayout->addWidget(buttons);
+    layout->addWidget(buttons);
 
     m_addressEdit->setFocus();
 }
@@ -42,7 +41,7 @@ void DirectConnectDialog::validateAndAccept()
 {
     if (host().isEmpty()) {
         QMessageBox::warning(this, tr("Invalid address"),
-                              tr("Please enter a server address, e.g. 127.0.0.1:7777"));
+                             tr("Please enter a server address, e.g. 127.0.0.1:7777"));
         return;
     }
     accept();
@@ -52,9 +51,7 @@ QString DirectConnectDialog::host() const
 {
     const QString text = m_addressEdit->text().trimmed();
     const int idx = text.lastIndexOf(':');
-    if (idx <= 0)
-        return text;
-    return text.left(idx);
+    return idx <= 0 ? text : text.left(idx);
 }
 
 quint16 DirectConnectDialog::port() const

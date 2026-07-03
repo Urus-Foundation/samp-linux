@@ -1,17 +1,35 @@
 #pragma once
 
-#define LAUNCHER_VERSION "0.1.0"
-
 #include <QObject>
 #include <QString>
 
-// Builds and runs the command used to start GTA:SA + SA:MP through Wine
-// (or Proton, if the user points Settings at a proton "run" wrapper).
+// Application version — also used in the HTTP User-Agent header.
+#define SAMPLINUX_VERSION "0.1.0"
+
+// Builds and runs the Wine command that starts GTA:SA + SA:MP.
 //
-// SA:MP itself is a Windows-only mod (samp.dll injected into gta_sa.exe),
-// so on Linux it is normally run through Wine. This class does not embed
-// any game files - it only launches what the user already has installed,
-// using paths configured in Settings.
+// SA:MP (samp.dll injected into gta_sa.exe) is Windows-only, so on Linux it
+// runs through Wine or a Proton "run" wrapper.  This class launches whatever
+// the user has configured in Settings — it does not embed or download any
+// game files.
+//
+// Nickname handling:
+//   SA:MP reads the player name from the Windows registry key
+//   HKCU\Software\SAMP\PlayerName, not from the command line.  Before
+//   starting the game we write the value via "wine reg add …" so the
+//   correct nickname is in place when samp.exe reads it.
+//
+// WINEPREFIX:
+//   If the user configured a custom prefix we set WINEPREFIX in the current
+//   process environment before calling QProcess::startDetached.  The value
+//   is inherited by the child process.  It is not restored afterwards, which
+//   is acceptable for the lifetime of the launcher process.
+//
+// Error reporting:
+//   LaunchResult carries both a boolean and a human-readable error string.
+//   The caller is responsible for surfacing errors to the user (e.g. via
+//   QMessageBox).  Wine process exit codes and crash logs are NOT currently
+//   captured — the game runs fully detached.
 class Launcher : public QObject
 {
     Q_OBJECT
@@ -19,19 +37,26 @@ public:
     explicit Launcher(QObject *parent = nullptr);
 
     struct LaunchResult {
-        bool started = false;
-        qint64 pid = 0;
+        bool    started = false;
+        qint64  pid     = 0;
         QString error;
     };
 
-    // ip/port/nickname/password describe the server to connect to.
-    // Returns immediately; actual process runs detached so the launcher
-    // window is not blocked while the game is running.
+    // Attempt to launch the game connecting to the given server.
+    // Returns immediately; the game process is detached.
     LaunchResult launch(const QString &ip,
-                         quint16 port,
-                         const QString &nickname,
-                         const QString &password) const;
+                        quint16        port,
+                        const QString &nickname,
+                        const QString &password) const;
 
 private:
-    static bool validatePaths(const QString &wineBin, const QString &gtaDir, QString *error);
+    // Returns false and populates *error if required paths are missing or
+    // obviously wrong (no samp.exe found, empty wine path, etc.).
+    static bool validatePaths(const QString &wineBin,
+                              const QString &gtaDir,
+                              QString       *error);
+
+    // Writes PlayerName to the Wine registry.  Non-fatal: if this step
+    // fails the game will still launch with whatever name was last saved.
+    static void writeNicknameToRegistry(const QString &wineBin, const QString &nickname);
 };

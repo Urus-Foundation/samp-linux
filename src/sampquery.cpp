@@ -4,9 +4,14 @@
 #include <QDataStream>
 
 namespace {
-constexpr int kTimeoutMs = 2500;
+constexpr int kTimeoutMs              = 2500;
 constexpr int kTimeoutCheckIntervalMs = 250;
-}
+constexpr quint32 kMaxStringLen       = 512;
+} // namespace
+
+// ---------------------------------------------------------------------------
+// Construction
+// ---------------------------------------------------------------------------
 
 SampQuery::SampQuery(QObject *parent)
     : QObject(parent)
@@ -20,18 +25,25 @@ SampQuery::SampQuery(QObject *parent)
     m_timeoutTimer.start();
 }
 
+// ---------------------------------------------------------------------------
+// Static helpers
+// ---------------------------------------------------------------------------
+
 QString SampQuery::keyFor(const QString &host, quint16 port)
 {
-    return host + QLatin1Char(':') + QString::number(port);
+    return host % QLatin1Char(':') % QString::number(port);
 }
 
 QByteArray SampQuery::buildPacket(const QHostAddress &addr, quint16 port, char opcode)
 {
     QByteArray packet;
+    packet.reserve(11);
     packet.append("SAMP", 4);
 
-    const QHostAddress v4(addr.toIPv4Address());
-    const QStringList octets = v4.toString().split(QLatin1Char('.'));
+    // IPv4 octets, one byte each
+    const QStringList octets = addr.toIPv4Address()
+                               ? QHostAddress(addr.toIPv4Address()).toString().split(QLatin1Char('.'))
+                               : QStringList{"0", "0", "0", "0"};
     for (const QString &o : octets)
         packet.append(static_cast<char>(o.toUInt() & 0xFF));
 
@@ -41,35 +53,53 @@ QByteArray SampQuery::buildPacket(const QHostAddress &addr, quint16 port, char o
     return packet;
 }
 
+// Decode a length-prefixed (pascal) string.
+// The SA:MP spec says UTF-8, but old servers frequently send Windows-1251 or
+// CP1252.  We try UTF-8 first; if it produces replacement characters we fall
+// back to Latin-1 so the bytes are preserved visibly rather than silently
+// dropped.
+QString SampQuery::readPascalString(QDataStream &stream)
+{
+    quint32 len = 0;
+    stream >> len;
+    if (stream.status() != QDataStream::Ok || len == 0 || len > kMaxStringLen)
+        return {};
+
+    QByteArray buf(static_cast<int>(len), Qt::Uninitialized);
+    if (stream.readRawData(buf.data(), buf.size()) != buf.size())
+        return {};
+
+    const QString utf8 = QString::fromUtf8(buf);
+    // If UTF-8 decoding introduced replacement characters the source bytes
+    // are not valid UTF-8 — fall back to Latin-1 (covers CP1252/Windows-1251
+    // for ASCII-range characters, at least preserving server names).
+    if (utf8.contains(QChar::ReplacementCharacter))
+        return QString::fromLatin1(buf);
+
+    return utf8;
+}
+
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
+
 void SampQuery::queryInfo(const QString &host, quint16 port)
 {
-    const QString k = keyFor(host, port);
-
-    // Fast path: already a valid IPv4 address.
+    // Fast path: already a dotted-decimal IPv4 address.
     QHostAddress direct;
     if (direct.setAddress(host) && direct.protocol() == QAbstractSocket::IPv4Protocol) {
-        PendingQuery pq;
-        pq.host = host;
-        pq.port = port;
-        pq.address = direct;
-        pq.elapsed.start();
-        m_pending.insert(k, pq);
-        m_socket->writeDatagram(buildPacket(direct, port, 'i'), direct, port);
+        dispatchQuery(host, port, direct);
         return;
     }
 
-    // Otherwise resolve the hostname asynchronously first.
-    QHostInfo::lookupHost(host, this, [this, host, port, k](const QHostInfo &info) {
+    // Async DNS resolution; result is queued back to this thread.
+    QHostInfo::lookupHost(host, this, [this, host, port](const QHostInfo &info) {
         if (info.error() != QHostInfo::NoError || info.addresses().isEmpty()) {
-            ServerInfo si;
-            si.address = host;
-            si.port = port;
-            si.online = false;
-            si.queried = true;
-            emit resultReady(si);
+            emitOffline(host, port);
             return;
         }
 
+        // Prefer IPv4 since the SA:MP packet format only encodes 4 octets.
         QHostAddress resolved;
         for (const QHostAddress &a : info.addresses()) {
             if (a.protocol() == QAbstractSocket::IPv4Protocol) {
@@ -77,69 +107,74 @@ void SampQuery::queryInfo(const QString &host, quint16 port)
                 break;
             }
         }
+
         if (resolved.isNull()) {
-            ServerInfo si;
-            si.address = host;
-            si.port = port;
-            si.online = false;
-            si.queried = true;
-            emit resultReady(si);
+            emitOffline(host, port);
             return;
         }
 
-        PendingQuery pq;
-        pq.host = host;
-        pq.port = port;
-        pq.address = resolved;
-        pq.elapsed.start();
-        m_pending.insert(k, pq);
-        m_socket->writeDatagram(buildPacket(resolved, port, 'i'), resolved, port);
+        dispatchQuery(host, port, resolved);
     });
 }
+
+// ---------------------------------------------------------------------------
+// Private helpers
+// ---------------------------------------------------------------------------
+
+void SampQuery::dispatchQuery(const QString &host, quint16 port, const QHostAddress &resolved)
+{
+    const QString k = keyFor(host, port);
+    PendingQuery pq;
+    pq.host    = host;
+    pq.port    = port;
+    pq.address = resolved;
+    pq.elapsed.start();
+    m_pending.insert(k, pq);
+    m_socket->writeDatagram(buildPacket(resolved, port, 'i'), resolved, port);
+}
+
+void SampQuery::emitOffline(const QString &host, quint16 port)
+{
+    ServerInfo si;
+    si.address = host;
+    si.port    = port;
+    si.online  = false;
+    si.queried = true;
+    emit resultReady(si);
+}
+
+// ---------------------------------------------------------------------------
+// Slots
+// ---------------------------------------------------------------------------
 
 void SampQuery::onReadyRead()
 {
     while (m_socket->hasPendingDatagrams()) {
-        QByteArray datagram;
-        datagram.resize(int(m_socket->pendingDatagramSize()));
+        QByteArray   datagram(static_cast<int>(m_socket->pendingDatagramSize()), Qt::Uninitialized);
         QHostAddress sender;
-        quint16 senderPort = 0;
+        quint16      senderPort = 0;
         m_socket->readDatagram(datagram.data(), datagram.size(), &sender, &senderPort);
 
+        // Minimum valid response: 4 magic + 4 IP + 2 port + 1 opcode = 11 bytes
         if (datagram.size() < 11 || !datagram.startsWith("SAMP"))
             continue;
+        if (datagram.at(10) != 'i')
+            continue;
 
-        const char opcode = datagram.at(10);
-        if (opcode != 'i')
-            continue; // we only send 'i' requests, ignore anything else
-
-        const QByteArray payload = datagram.mid(11);
-        QDataStream stream(payload);
+        QDataStream stream(datagram.mid(11));
         stream.setByteOrder(QDataStream::LittleEndian);
 
-        quint8 passworded = 0;
-        quint16 players = 0;
+        quint8  passworded = 0;
+        quint16 players    = 0;
         quint16 maxPlayers = 0;
         stream >> passworded >> players >> maxPlayers;
 
-        auto readPascalString = [&stream]() -> QString {
-            quint32 len = 0;
-            stream >> len;
-            if (stream.status() != QDataStream::Ok || len == 0 || len > 512)
-                return QString();
-            QByteArray buf(int(len), 0);
-            const int n = stream.readRawData(buf.data(), int(len));
-            if (n != int(len))
-                return QString();
-            return QString::fromUtf8(buf);
-        };
+        const QString hostname  = readPascalString(stream);
+        const QString gamemode  = readPascalString(stream);
+        const QString language  = readPascalString(stream);
 
-        const QString hostname = readPascalString();
-        const QString gamemode = readPascalString();
-        const QString language = readPascalString();
-
-        // Match against a pending request using sender address + port so
-        // servers sharing the same port do not overwrite each other.
+        // Match against a pending query.  Try exact address+port first so
+        // that two servers on the same port (different IPs) don't collide.
         QString foundKey;
         for (auto it = m_pending.constBegin(); it != m_pending.constEnd(); ++it) {
             if (it.value().port == senderPort && it.value().address == sender) {
@@ -147,6 +182,7 @@ void SampQuery::onReadyRead()
                 break;
             }
         }
+        // Fallback: port-only match (NAT or address mismatch cases).
         if (foundKey.isEmpty()) {
             for (auto it = m_pending.constBegin(); it != m_pending.constEnd(); ++it) {
                 if (it.value().port == senderPort) {
@@ -157,20 +193,20 @@ void SampQuery::onReadyRead()
         }
 
         ServerInfo si;
-        si.port = senderPort;
-        si.online = true;
-        si.queried = true;
+        si.port       = senderPort;
+        si.online     = true;
+        si.queried    = true;
         si.passworded = (passworded != 0);
-        si.players = players;
+        si.players    = players;
         si.maxPlayers = maxPlayers;
-        si.hostname = hostname;
-        si.gamemode = gamemode;
-        si.language = language;
+        si.hostname   = hostname;
+        si.gamemode   = gamemode;
+        si.language   = language;
 
         if (!foundKey.isEmpty()) {
             const PendingQuery pq = m_pending.take(foundKey);
             si.address = pq.host;
-            si.pingMs = pq.elapsed.elapsed();
+            si.pingMs  = pq.elapsed.elapsed();
         } else {
             si.address = sender.toString();
         }
@@ -186,13 +222,8 @@ void SampQuery::onTimeoutTick()
         if (it.value().elapsed.elapsed() > kTimeoutMs)
             expired << it.key();
     }
-    for (const QString &k : expired) {
+    for (const QString &k : std::as_const(expired)) {
         const PendingQuery pq = m_pending.take(k);
-        ServerInfo si;
-        si.address = pq.host;
-        si.port = pq.port;
-        si.online = false;
-        si.queried = true;
-        emit resultReady(si);
+        emitOffline(pq.host, pq.port);
     }
 }

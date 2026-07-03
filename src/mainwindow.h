@@ -1,8 +1,8 @@
 #pragma once
 
 #include <QMainWindow>
-#include <QVector>
 #include <QHash>
+
 #include "serverinfo.h"
 
 class QTabWidget;
@@ -20,6 +20,15 @@ class SampQuery;
 class FavoritesManager;
 class Launcher;
 
+// Groups together the widgets and models for a single server-list tab
+// (Internet or Favorites) so we don't repeat eight member variables twice.
+struct ServerTabWidgets {
+    QTableView            *view     = nullptr;
+    ServerListModel       *model    = nullptr;
+    QSortFilterProxyModel *proxy    = nullptr;
+    QLineEdit             *filter   = nullptr;
+};
+
 class MainWindow : public QMainWindow
 {
     Q_OBJECT
@@ -28,75 +37,102 @@ public:
     ~MainWindow() override;
 
 private slots:
+    // Master-list fetch
     void refreshInternetList();
     void onMasterListReply(QNetworkReply *reply);
+
+    // Periodic ping sweep
     void onPingTimerTick();
 
+    // UDP query results
     void onQueryResult(ServerInfo info);
+
+    // Context menus
     void onInternetContextMenu(const QPoint &pos);
     void onFavoritesContextMenu(const QPoint &pos);
 
-    void requeryVisibleServers(QTableView *view, ServerListModel *model);
-    void requeryInternet();
-    void requeryFavorites();
+    // Re-query buttons
+    void requeryTab(const ServerTabWidgets &tab);
+    void requeryInternetTab();
+    void requeryFavoritesTab();
 
-    void connectToSelected(QTableView *view, ServerListModel *model);
+    // Connect actions
+    void connectToSelection(const ServerTabWidgets &tab);
     void connectToInternetSelection();
     void connectToFavoriteSelection();
 
+    // Favorites management
     void addSelectedInternetToFavorites();
     void addFavoriteManually();
     void removeSelectedFavorite();
 
+    // Toolbar dialogs
     void openDirectConnect();
     void openSettings();
 
+    // Filter boxes
     void onInternetFilterChanged(const QString &text);
     void onFavoritesFilterChanged(const QString &text);
 
 private:
-    QTabWidget *m_tabs;
-
-    // Internet tab
-    QTableView *m_internetView;
-    ServerListModel *m_internetModel;
-    QSortFilterProxyModel *m_internetProxy;
-    QLineEdit *m_internetFilter;
-    QLabel *m_internetStatusLabel;
-    QPushButton *m_internetRefreshBtn;
-
-    // Favorites tab
-    QTableView *m_favoritesView;
-    ServerListModel *m_favoritesModel;
-    QSortFilterProxyModel *m_favoritesProxy;
-    QLineEdit *m_favoritesFilter;
-
-    QLabel *m_statusBarLabel;
-
-    SampQuery *m_query;
-    FavoritesManager *m_favoritesManager;
-    Launcher *m_launcher;
-    QNetworkAccessManager *m_netManager;
-    QTimer *m_pingTimer;
-    qint64 m_gamePid = 0;
-    QHash<QString, ServerInfo> m_serverCache;
-
-    void buildUi();
+    // UI construction
+    void     buildUi();
+    QWidget *buildHeaderBar();
     QWidget *buildInternetTab();
     QWidget *buildFavoritesTab();
-    QWidget *buildHeaderBar();
 
+    // Tab widget helpers (reduce duplication between Internet / Favorites)
+    void    setupTableView(QTableView *view, QSortFilterProxyModel *proxy);
+    void    setupProxy(QSortFilterProxyModel *proxy, ServerListModel *model);
+
+    // Server interaction
     void connectServer(const ServerInfo &info);
     void reloadFavoritesModel();
 
-    ServerInfo selectedServer(QTableView *view, ServerListModel *model) const;
-    ServerInfo serverAt(QTableView *view, ServerListModel *model, const QPoint &pos) const;
-    void showServerContextMenu(QTableView *view, ServerListModel *model, const QPoint &pos, bool isFavorite);
+    // Selection helpers
+    ServerInfo selectedServer(const ServerTabWidgets &tab) const;
+    ServerInfo serverAt(const ServerTabWidgets &tab, const QPoint &pos) const;
+
+    // Context menu (shared between tabs)
+    void showServerContextMenu(const ServerTabWidgets &tab, const QPoint &pos, bool isFavorite);
+
+    // Favorites CRUD
     void addServerToFavorites(const ServerInfo &info);
     void removeServerFromFavorites(const ServerInfo &info);
+
+    // Detail / clipboard
     void showServerDetails(const ServerInfo &info);
     void copyServerInfo(const ServerInfo &info) const;
-    bool isProcessRunning(qint64 pid) const;
+
+    // Cache helpers
     void applyServerCache(QVector<ServerInfo> *servers) const;
-    void updateServerEntry(ServerListModel *model, const ServerInfo &info) const;
+    void mergeIntoCache(const ServerInfo &incoming);
+    ServerInfo mergedWithCache(const ServerInfo &info) const;
+    void updateModelEntry(ServerListModel *model, const ServerInfo &info) const;
+
+    // Process monitoring
+    bool isProcessRunning(qint64 pid) const;
+
+    // Core objects
+    SampQuery            *m_query;
+    FavoritesManager     *m_favoritesManager;
+    Launcher             *m_launcher;
+    QNetworkAccessManager *m_netManager;
+    QTimer               *m_pingTimer;
+
+    // Server cache (shared between both tabs)
+    QHash<QString, ServerInfo> m_serverCache;
+    qint64                     m_gamePid = 0;
+
+    // Tabs
+    QTabWidget       *m_tabs;
+    ServerTabWidgets  m_internet;
+    ServerTabWidgets  m_favorites;
+
+    // Extra widgets only on the Internet tab
+    QLabel       *m_internetStatusLabel  = nullptr;
+    QPushButton  *m_internetRefreshBtn   = nullptr;
+
+    // Status bar
+    QLabel *m_statusBarLabel = nullptr;
 };

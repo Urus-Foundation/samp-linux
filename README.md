@@ -1,4 +1,4 @@
-### SA:MP Launcher
+### SA:MP Linux Launcher
 
 A third-party launcher for **GTA San Andreas Multiplayer (SA:MP)** on Linux.  
 Because SA:MP itself is a Windows mod (`samp.dll` injected into `gta_sa.exe`), this launcher runs the game through **Wine** — it does not include any game files, it only helps launch an already installed game.
