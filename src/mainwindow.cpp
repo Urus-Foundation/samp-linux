@@ -348,6 +348,12 @@ void MainWindow::onMasterListReply(QNetworkReply *reply)
         s.passworded = obj.value("pa").toBool(obj.value("password").toBool());
         s.online     = true;
         s.queried    = true;   // master list gives us metadata; live ping is still TBD
+        // TODO: implement a proper “live ping” state machine/caching so UI can
+        //       distinguish between “measured once”, “currently pinging”, and
+        //       “timed out” per-server (instead of using pingMs < 0 heuristics).
+        // TODO: validate port parsing from open.mp response (ensure 1..65535)
+        //       and handle malformed entries without silently using default 7777.
+
         servers.append(s);
     }
 

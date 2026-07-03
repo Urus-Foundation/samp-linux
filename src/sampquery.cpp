@@ -76,6 +76,10 @@ QString SampQuery::readPascalString(QDataStream &stream)
     if (utf8.contains(QChar::ReplacementCharacter))
         return QString::fromLatin1(buf);
 
+    // TODO: consider a more robust charset detection (CP1252 vs Win-1251)
+    //       using heuristics or server-provided hints, if available.
+
+
     return utf8;
 }
 
@@ -183,6 +187,9 @@ void SampQuery::onReadyRead()
             }
         }
         // Fallback: port-only match (NAT or address mismatch cases).
+        // TODO: improve matching keying to avoid collisions if multiple
+        //       queries share the same port (e.g. query a stable identifier).
+
         if (foundKey.isEmpty()) {
             for (auto it = m_pending.constBegin(); it != m_pending.constEnd(); ++it) {
                 if (it.value().port == senderPort) {
