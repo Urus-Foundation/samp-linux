@@ -1,98 +1,114 @@
-/* ---- SAMPQt Launcher - standard dark theme ---- */
-
 * {
     outline: none;
     font-family: "Segoe UI", "Noto Sans", sans-serif;
 }
 
 QWidget {
-    background-color: #1e1e1e;
-    color: #e0e0e0;
+    background-color: #f5f5f5;
+    color: #202020;
     font-size: 12px;
 }
 
 QMainWindow {
-    background-color: #1e1e1e;
+    background-color: #f5f5f5;
 }
 
 #HeaderBar {
-    background-color: #1e1e1e;
-    border-bottom: 1px solid #333333;
+    background-color: #f5f5f5;
+    border-bottom: 1px solid #d9d9d9;
 }
 
 #AppTitle {
     font-size: 16px;
     font-weight: bold;
-    color: #ffffff;
+    color: #111111;
 }
 
 #AppSubtitle {
-    color: #b0b0b0;
+    color: #666666;
     font-size: 11px;
 }
 
 QTabWidget::pane {
-    border: 1px solid #333333;
-    background: #1e1e1e;
+    border: 1px solid #d9d9d9;
+    background: #ffffff;
 }
 
 QTabBar::tab {
-    background: #252525;
-    color: #c8c8c8;
-    padding: 8px 14px;
-    border: 1px solid #333333;
+    background: #f1f1f1;
+    color: #555555;
+    padding: 8px 8px;
+    border: 1px solid #d9d9d9;
     margin-right: 2px;
 }
 
 QTabBar::tab:selected {
-    background: #2f2f2f;
-    color: #ffffff;
+    background: #ffffff;
+    color: #111111;
+    border-bottom: 1px solid #ffffff;
 }
 
 QPushButton {
-    background-color: #2c2c2c;
-    color: #f0f0f0;
-    border: 1px solid #444444;
+    background-color: #f7f7f7;
+    color: #202020;
+    border: 1px solid #cfcfcf;
     padding: 6px 12px;
 }
 
 QPushButton:hover {
-    background-color: #333333;
+    background-color: #eeeeee;
 }
 
 QPushButton:pressed {
-    background-color: #242424;
+    background-color: #e4e4e4;
 }
 
 QPushButton:disabled {
-    color: #777777;
-    background-color: #222222;
+    color: #999999;
+    background-color: #f2f2f2;
+    border: 1px solid #dddddd;
 }
 
 QPushButton#PrimaryButton {
-    background-color: #4a73d8;
-    border: 1px solid #4a73d8;
+    background-color: #2f80ed;
+    border: 1px solid #2f80ed;
     color: #ffffff;
+}
+
+QPushButton#PrimaryButton:hover {
+    background-color: #1f6fdb;
 }
 
 QPushButton#DangerButton {
     background-color: transparent;
-    border: 1px solid #7a3b3b;
-    color: #ff9a9a;
+    border: 1px solid #d9534f;
+    color: #d9534f;
 }
 
-QLineEdit, QSpinBox, QComboBox {
-    background-color: #262626;
-    border: 1px solid #444444;
+QPushButton#DangerButton:hover {
+    background-color: #fff2f2;
+}
+
+QLineEdit,
+QSpinBox,
+QComboBox {
+    background-color: #ffffff;
+    border: 1px solid #cfcfcf;
     padding: 6px 8px;
-    color: #f0f0f0;
+    color: #202020;
+}
+
+QLineEdit:focus,
+QSpinBox:focus,
+QComboBox:focus {
+    border: 1px solid #2f80ed;
 }
 
 QTableView {
-    background-color: #1e1e1e;
-    alternate-background-color: #232323;
-    gridline-color: #333333;
-    border: 1px solid #333333;
+    background-color: #ffffff;
+    alternate-background-color: #f8f8f8;
+    gridline-color: #e3e3e3;
+    border: 1px solid #d9d9d9;
 }
 
 QTableView::item {
@@ -100,30 +116,30 @@ QTableView::item {
 }
 
 QHeaderView::section {
-    background-color: #252525;
-    color: #d0d0d0;
+    background-color: #f3f3f3;
+    color: #202020;
     padding: 6px;
-    border: 1px solid #333333;
+    border: 1px solid #d9d9d9;
 }
 
 QTableView::item:selected {
-    background-color: #355c91;
-    color: #ffffff;
+    background-color: #539aff;
+    color: #111111;
 }
 
 QStatusBar {
-    background-color: #222222;
-    color: #c0c0c0;
-    border-top: 1px solid #333333;
+    background-color: #ffffff;
+    color: #555555;
+    border-top: 1px solid #d9d9d9;
 }
 
 QLabel#MutedLabel {
-    color: #a0a0a0;
+    color: #777777;
     font-size: 11px;
 }
 
 QDialog {
-    background-color: #1e1e1e;
+    background-color: #f5f5f5;
 }
 
 QCheckBox {
@@ -133,18 +149,18 @@ QCheckBox {
 QCheckBox::indicator {
     width: 14px;
     height: 14px;
-    border: 1px solid #444444;
-    background: #262626;
+    border: 1px solid #bdbdbd;
+    background: #ffffff;
 }
 
 QCheckBox::indicator:checked {
-    background: #4a73d8;
-    border: 1px solid #4a73d8;
+    background: #2f80ed;
+    border: 1px solid #2f80ed;
 }
 
 QToolTip {
-    background-color: #2a2a2a;
-    color: #f0f0f0;
-    border: 1px solid #444444;
+    background-color: #ffffff;
+    color: #202020;
+    border: 1px solid #cfcfcf;
     padding: 4px 6px;
 }

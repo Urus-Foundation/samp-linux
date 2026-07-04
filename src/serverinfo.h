@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QString>
+#include <QMap>
 #include <QMetaType>
 
 // Represents a single SA:MP / open.mp server entry.
@@ -24,6 +25,10 @@ struct ServerInfo {
     // Query state
     bool online  = false;  // true after first successful UDP reply
     bool queried = false;  // true once any query attempt has completed
+
+    // Dynamic key-value rules returned by opcode 'r'
+    QMap<QString, QString> rules;
+    bool rulesQueried = false;
 
     // Per-favorite overrides (empty = use global setting)
     QString nickname;

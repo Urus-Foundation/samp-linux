@@ -559,7 +559,7 @@ void MainWindow::connectServer(const ServerInfo &info)
         }
     }
 
-    ServerPropertiesDialog dlg(dialogInfo, this);
+    ServerPropertiesDialog dlg(dialogInfo, ServerPropertiesDialog::Mode::Minimal, this);
     if (dlg.exec() != QDialog::Accepted || dlg.action() == ServerPropertiesDialog::Action::Cancelled)
         return;
 
@@ -680,49 +680,61 @@ void MainWindow::showServerProperties(const ServerInfo &info)
     if (info.address.isEmpty())
         return;
 
-    QDialog dlg(this);
-    dlg.setWindowTitle(
-        tr("Server Properties - %1")
-            .arg(info.hostname.isEmpty() ? info.displayAddress() : info.hostname));
-    dlg.setMinimumWidth(420);
+    /* Pre-fill saved passwords from Favorites if available. */
+    ServerInfo dialogInfo = info;
+    for (const ServerInfo &fav : m_favoritesManager->favorites()) {
+        if (fav.address == info.address && fav.port == info.port) {
+            if (dialogInfo.savedPassword.isEmpty())
+                dialogInfo.savedPassword = fav.savedPassword;
+            if (dialogInfo.rconPassword.isEmpty())
+                dialogInfo.rconPassword = fav.rconPassword;
+            break;
+        }
+    }
 
-    auto *layout = new QVBoxLayout(&dlg);
-    auto *form   = new QFormLayout();
-    form->setLabelAlignment(Qt::AlignLeft);
+    ServerPropertiesDialog dlg(dialogInfo, ServerPropertiesDialog::Mode::Full, this);
 
-    auto addRow = [&](const QString &label, const QString &value) {
-        auto *lbl = new QLabel(label, &dlg);
-        lbl->setStyleSheet("font-weight: 600;");
-        form->addRow(lbl, new QLabel(value, &dlg));
-    };
+    /* Wire rulesReady so the dialog is populated as soon as the UDP reply
+     * arrives (or immediately via queued invoke when served from cache). */
+    QMetaObject::Connection rulesConn = connect(
+        m_query, &SampQuery::rulesReady,
+        &dlg, [&dlg, &info](const ServerInfo &result) {
+            if (result.address == info.address && result.port == info.port)
+                dlg.setRules(result.rules);
+        });
 
-    const bool live = info.queried && info.online;
-    addRow(tr("Address:"),     info.displayAddress());
-    addRow(tr("Server Name:"), info.hostname.isEmpty()  ? tr("unknown") : info.hostname);
-    addRow(tr("Gamemode:"),    info.gamemode.isEmpty()   ? tr("unknown") : info.gamemode);
-    addRow(tr("Language:"),    info.language.isEmpty()   ? tr("unknown") : info.language);
-    addRow(tr("Players:"),     live ? QStringLiteral("%1 / %2").arg(info.players).arg(info.maxPlayers)
-                                    : tr("unknown"));
-    addRow(tr("Ping:"),        (live && info.pingMs >= 0) ? QStringLiteral("%1 ms").arg(info.pingMs)
-                                                           : tr("unknown"));
-    addRow(tr("Online:"),      info.online    ? tr("Yes") : tr("No"));
-    addRow(tr("Passworded:"),  info.passworded ? tr("Yes") : tr("No"));
+    /* Fire rules query — served from disk cache if TTL still valid. */
+    m_query->queryRules(info.address, info.port);
 
-    layout->addLayout(form);
+    connect(&dlg, &ServerPropertiesDialog::copyRequested,
+            this, [this](const ServerInfo &info) {
+                copyServerInfo(info);
+            });
 
-    auto *buttonRow = new QHBoxLayout();
-    auto *copyBtn   = new QPushButton(tr("Copy Server Info"), &dlg);
-    auto *closeBtn  = new QPushButton(tr("Close"), &dlg);
-    buttonRow->addWidget(copyBtn);
-    buttonRow->addStretch(1);
-    buttonRow->addWidget(closeBtn);
-    layout->addLayout(buttonRow);
-
-    connect(copyBtn,  &QPushButton::clicked, this, [this, info] { copyServerInfo(info); });
-    connect(closeBtn, &QPushButton::clicked, &dlg, &QDialog::accept);
-
-    disableWindowMaximizeButton(&dlg);
     dlg.exec();
+    disconnect(rulesConn);
+
+    if (dlg.action() == ServerPropertiesDialog::Action::Cancelled)
+        return;
+
+    if (dlg.action() == ServerPropertiesDialog::Action::Save) {
+        ServerInfo toSave    = info;
+        toSave.savedPassword = dlg.serverPassword();
+        toSave.rconPassword  = dlg.rconPassword();
+        m_favoritesManager->removeFavorite(toSave.address, toSave.port);
+        m_favoritesManager->addFavorite(toSave);
+        reloadFavoritesModel();
+        statusBar()->showMessage(
+            tr("Saved %1 to Favorites.")
+                .arg(info.hostname.isEmpty() ? info.displayAddress() : info.hostname), 4000);
+        return;
+    }
+
+    /* Action::Connect — delegate to the normal connect flow. */
+    ServerInfo connectInfo    = info;
+    connectInfo.savedPassword = dlg.serverPassword();
+    connectInfo.rconPassword  = dlg.rconPassword();
+    connectServer(connectInfo);
 }
 
 void MainWindow::copyServerInfo(const ServerInfo &info) const

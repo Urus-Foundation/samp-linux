@@ -13,18 +13,12 @@ void disableWindowMaximizeButton(QWidget *window)
     window->setFixedSize(window->size());
 }
 
-namespace {
-QPixmap& atlasPixmap()
-{
+QIcon getIcon(IconIndex idx) {
     static QPixmap atlas;
     if (atlas.isNull())
         atlas = QPixmap(":/icons/ICON_ATLAS.png");
-    return atlas;
-}
-} // namespace
 
-QIcon getIcon(IconIndex idx) {
     int col = idx % 8, row = idx / 8;
     const QRect src(2 + col * 34, 2 + row * 34, 32, 32);
-    return QIcon(atlasPixmap().copy(src));
+    return QIcon(atlas.copy(src));
 }
