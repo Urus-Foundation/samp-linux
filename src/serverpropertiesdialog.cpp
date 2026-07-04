@@ -1,5 +1,5 @@
 #include "serverpropertiesdialog.h"
-#include "qutils.h"
+#include "helper.h"
 
 #include <QVBoxLayout>
 #include <QHBoxLayout>

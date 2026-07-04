@@ -101,7 +101,7 @@ private:
     void removeServerFromFavorites(const ServerInfo &info);
 
     // Detail / clipboard
-    void showServerDetails(const ServerInfo &info);
+    void showServerProperties(const ServerInfo &info);
     void copyServerInfo(const ServerInfo &info) const;
 
     // Cache helpers

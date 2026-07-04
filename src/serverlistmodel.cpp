@@ -1,4 +1,5 @@
 #include "serverlistmodel.h"
+#include "helper.h"
 
 #include <QIcon>
 #include <QColor>
@@ -58,7 +59,7 @@ QVariant ServerListModel::data(const QModelIndex &index, int role) const
     // --- Icon ---------------------------------------------------------------
     case Qt::DecorationRole:
         if (col == ColLock)
-            return s.passworded ? QIcon(QStringLiteral(":/icons/lock.svg")) : QIcon(QStringLiteral(":/icons/unlock.svg"));
+            return s.passworded ? getIcon(ICON_PASSWORD) : getIcon(ICON_UNPASSWORD);
         return {};
 
     // --- Numeric sort key (Qt::UserRole + 1) --------------------------------

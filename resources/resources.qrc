@@ -4,8 +4,7 @@
     </qresource>
 
     <qresource prefix="/icons">
-        <file alias="samp-linux.png">icons/samp-linux.png</file>
-        <file alias="lock.svg">icons/lock.svg</file>
-        <file alias="unlock.svg">icons/unlock.svg</file>
+        <file alias="ICON_ATLAS.png">icons/ICON_ATLAS.png</file>
     </qresource>
 </RCC>
+

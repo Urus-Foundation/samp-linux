@@ -1,5 +1,5 @@
 #include "mainwindow.h"
-#include "qutils.h"
+#include "helper.h"
 
 #include <QTabWidget>
 #include <QTableView>
@@ -51,8 +51,8 @@ MainWindow::MainWindow(QWidget *parent)
     , m_netManager(new QNetworkAccessManager(this))
     , m_pingTimer(new QTimer(this))
 {
-    setWindowTitle(tr("SA:MP Linux Launcher"));
-    setWindowIcon(QIcon(":/icons/samp-linux.png"));
+    setWindowTitle(tr("SA:MP Linux Launcher - " SAMPLINUX_VERSION));
+    setWindowIcon(getIcon(ICON_SAMP_LOGO));
     resize(980, 640);
 
     buildUi();
@@ -71,6 +71,9 @@ MainWindow::MainWindow(QWidget *parent)
     if (settings.value("paths/gtaDir").toString().isEmpty()) {
         statusBar()->showMessage(
             tr("Tip: open Settings and set your GTA San Andreas folder before connecting."), 8000);
+    }
+    else {
+        statusBar()->showMessage(tr("Ready. Select server to connect."));
     }
 
     refreshInternetList();
@@ -399,6 +402,9 @@ void MainWindow::onPingTimerTick()
 
 void MainWindow::requeryTab(const ServerTabWidgets &tab)
 {
+    int total = 0;
+    m_statusLabel->setText(tr("Pinging servers..."));
+
     for (const ServerInfo &s : tab.model->all()) {
         int retry = 0;
         while (!s.online && retry < PING_MAX_RETRIES) {
@@ -408,23 +414,23 @@ void MainWindow::requeryTab(const ServerTabWidgets &tab)
             // or just timed out ping. The master list may not have the latest status,
             // so we always re-query.
             m_query->queryInfo(s.address, s.port);
+            m_statusLabel->setText(tr("Re-pinging %1...").arg(s.hostname.isEmpty() ? s.displayAddress() : s.hostname));
             retry++;
         }
+        total++;
     }
+
+    m_statusLabel->setText(tr("Successfully pinged %1 servers.").arg(total));
 }
 
 void MainWindow::requeryInternetTab()
 {
-    m_statusLabel->setText(tr("Pinging servers..."));
     requeryTab(m_internet);
-    m_statusLabel->clear();
 }
 
 void MainWindow::requeryFavoritesTab()
 {
-    m_statusLabel->setText(tr("Pinging servers..."));
     requeryTab(m_favorites);
-    m_statusLabel->clear();
 }
 
 // ---------------------------------------------------------------------------
@@ -474,23 +480,38 @@ void MainWindow::showServerContextMenu(const ServerTabWidgets &tab,
         return;
 
     QMenu menu(this);
-    menu.addAction(tr("Connect"),        [this, info] { connectServer(info); });
+
+    auto addAction = [&](const QString &text, const QIcon &icon, auto &&fn) {
+        QAction *act = menu.addAction(icon, text);
+        connect(act, &QAction::triggered, this, std::forward<decltype(fn)>(fn));
+        return act;
+    };
+
+    addAction(tr("Connect"), getIcon(ICON_CONNECT),
+               [this, info] { connectServer(info); });
+
+    menu.addSeparator();
+    addAction(tr("Server Properties"), getIcon(ICON_SVR_PROPS),
+               [this, info] { showServerProperties(info); });
+    addAction(tr("Copy Server Info"), getIcon(ICON_COPY_INFO),
+               [this, info] { copyServerInfo(info); });
 
     if (!isFavorite) {
-        menu.addAction(tr("Add to Favorites"), [this, info] { addServerToFavorites(info); });
+        menu.addSeparator();
+        addAction(tr("Add to Favorites"), getIcon(ICON_ADD_FAV),
+                  [this, info] { addServerToFavorites(info); });
     }
-
-    menu.addAction(tr("Server Details"),  [this, info] { showServerDetails(info); });
-    menu.addAction(tr("Copy Server Info"), [this, info] { copyServerInfo(info); });
 
     if (isFavorite) {
         menu.addSeparator();
-        menu.addAction(tr("Remove from Favorites"),
-                       [this, info] { removeServerFromFavorites(info); });
+        addAction(tr("Remove from Favorites"), getIcon(ICON_DELETE_SVR),
+                  [this, info] { removeServerFromFavorites(info); });
     }
+
 
     menu.exec(tab.view->viewport()->mapToGlobal(pos));
 }
+
 
 // ---------------------------------------------------------------------------
 // Connecting to a server
@@ -654,14 +675,14 @@ void MainWindow::removeServerFromFavorites(const ServerInfo &info)
 // Server details / clipboard
 // ---------------------------------------------------------------------------
 
-void MainWindow::showServerDetails(const ServerInfo &info)
+void MainWindow::showServerProperties(const ServerInfo &info)
 {
     if (info.address.isEmpty())
         return;
 
     QDialog dlg(this);
     dlg.setWindowTitle(
-        tr("Server Details - %1")
+        tr("Server Properties - %1")
             .arg(info.hostname.isEmpty() ? info.displayAddress() : info.hostname));
     dlg.setMinimumWidth(420);
 

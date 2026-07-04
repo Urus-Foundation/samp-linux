@@ -4,6 +4,7 @@
 
 #include "launcher.h"      // SAMPLINUX_VERSION
 #include "mainwindow.h"
+#include "helper.h"
 
 int main(int argc, char *argv[])
 {
