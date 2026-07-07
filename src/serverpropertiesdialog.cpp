@@ -2,6 +2,7 @@
 #include "helper.h"
 #include "mainwindow.h"
 
+#include <QDebug>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QFormLayout>
@@ -188,14 +189,11 @@ void ServerPropertiesDialog::buildInfoSection(const ServerInfo &)
 void ServerPropertiesDialog::buildRulesSection()
 {
     m_rulesStatus = new QLabel(tr("Fetching rules…"), this);
-    m_rulesStatus->setStyleSheet(QStringLiteral("color: #888; font-style: italic;"));
+    m_rulesStatus->setStyleSheet(QStringLiteral("font-style: italic;"));
 
     m_rulesTree = new QTreeWidget(this);
     m_rulesTree->setColumnCount(2);
     m_rulesTree->setHeaderLabels({tr("Rule"), tr("Value")});
-    m_rulesTree->setRootIsDecorated(false);
-    m_rulesTree->setAlternatingRowColors(true);
-    m_rulesTree->setSortingEnabled(true);
     m_rulesTree->sortByColumn(0, Qt::AscendingOrder);
     m_rulesTree->setSelectionMode(QAbstractItemView::SingleSelection);
     m_rulesTree->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -212,12 +210,15 @@ void ServerPropertiesDialog::buildRulesSection()
 
 void ServerPropertiesDialog::setRules(const QMap<QString, QString> &rules)
 {
-    m_rulesTree->clear();
-
-    if (rules.isEmpty())
-        return;
-
     m_rulesStatus->setVisible(false);
+
+    if (rules.isEmpty()) {
+        m_rulesStatus->setText(tr("Server did not report any rules."));
+        m_rulesStatus->setVisible(true);
+        return;
+    }
+
+    m_rulesTree->clear();
 
     /* Iterate over the full map — no hardcoded keys, future-proof. */
     for (auto it = rules.constBegin(); it != rules.constEnd(); ++it) {
@@ -225,6 +226,7 @@ void ServerPropertiesDialog::setRules(const QMap<QString, QString> &rules)
         item->setText(0, it.key());
         item->setText(1, it.value());
         item->setTextAlignment(1, Qt::AlignLeft | Qt::AlignVCenter);
+        qDebug().noquote() << "ServerPropertiesDialog: rule" << it.key() << "=" << it.value();
     }
 }
 

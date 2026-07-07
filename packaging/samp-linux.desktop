@@ -1,8 +1,8 @@
 [Desktop Entry]
 Type=Application
 Name=SA:MP Launcher
-Comment=Launcher for GTA San Andreas Multiplayer (SA:MP) on Linux
-Exec=samp-linux
+Comment=GTA San Andreas Multiplayer
+Exec=/usr/local/bin/samp-linux
 Icon=samp-linux
 Terminal=false
 Categories=Game;

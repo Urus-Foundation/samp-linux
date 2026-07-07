@@ -35,7 +35,8 @@ qt_add_executable(samp-linux
     src/launcher.h
     src/launcher.cpp
     src/helper.cpp
-    resources/resources.qrc
+    src/helper.h
+    data/paths.qrc
 )
 
 target_link_libraries(samp-linux PRIVATE
@@ -52,6 +53,6 @@ install(TARGETS samp-linux RUNTIME DESTINATION bin)
 install(FILES packaging/samp-linux.desktop DESTINATION share/applications OPTIONAL)
 
 # Install App desktop icons
-install(FILES resource/icons/samp-linux.png 
+install(FILES data/icons/samp-linux.png 
         DESTINATION share/icons/hicolor/256x256/apps 
         OPTIONAL)

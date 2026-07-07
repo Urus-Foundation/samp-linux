@@ -4,7 +4,7 @@
 #include <QString>
 
 // Application version — also used in the HTTP User-Agent header.
-#define SAMPLINUX_VERSION "0.1.0"
+#define SAMPLINUX_VERSION "0.1.1"
 
 // Builds and runs the Wine command that starts GTA:SA + SA:MP.
 //

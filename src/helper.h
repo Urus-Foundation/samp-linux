@@ -32,7 +32,7 @@ typedef enum {
 
     // Toolbar icons
     ICON_TB_CONNECT, ICON_TB_ADD, ICON_TB_DELETE,
-    ICON_TB_REFRESH, ICON_TB_INFO, ICON_TB_CHAT,
+    ICON_TB_INFO, ICON_TB_CHAT,
     ICON_TB_SETTINGS, ICON_TB_WEB,
 
     // Server status icons

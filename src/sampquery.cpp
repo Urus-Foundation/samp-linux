@@ -78,6 +78,29 @@ QString SampQuery::readPascalString(QDataStream &stream)
     return utf8;
 }
 
+/* Decode a length-prefixed string from the 'r' (rules) response.
+ * Unlike the 'i' response strings (4-byte length prefix), the rules opcode
+ * uses a single-byte length prefix for both the rule name and its value. */
+QString SampQuery::readRuleString(QDataStream &stream)
+{
+    quint8 len = 0;
+    stream >> len;
+    if (stream.status() != QDataStream::Ok)
+        return {};
+    if (len == 0)
+        return QString();
+
+    QByteArray buf(static_cast<int>(len), Qt::Uninitialized);
+    if (stream.readRawData(buf.data(), buf.size()) != buf.size())
+        return {};
+
+    const QString utf8 = QString::fromUtf8(buf);
+    if (utf8.contains(QChar::ReplacementCharacter))
+        return QString::fromLatin1(buf);
+
+    return utf8;
+}
+
 /* ---------------------------------------------------------------------------
  * Disk cache
  * ---------------------------------------------------------------------------*/
@@ -362,15 +385,36 @@ void SampQuery::onReadyRead()
                 si.address = pq.host;
                 si.pingMs  = pq.elapsed.elapsed();
             } else {
-                si.address = sender.toString();
+                /* Pending query not found — try to recover the original hostname
+                 * from cache keyed by sender IP, so rulesReady carries the same
+                 * address string callers passed to queryRules(). Without this,
+                 * a hostname-based call gets an IP back and the address guard in
+                 * MainWindow silently drops the signal. */
+                const QString senderIp = sender.toString();
+                ServerInfo fallback;
+                if (loadFromCache(senderIp, senderPort, fallback) && !fallback.address.isEmpty())
+                    si.address = fallback.address;
+                else
+                    si.address = senderIp;
             }
 
-            /* Parse key-value pairs until stream exhausted or error. */
-            while (stream.status() == QDataStream::Ok) {
-                const QString key = readPascalString(stream);
-                if (key.isEmpty())
+            /* Parse key-value pairs. The response starts with a 2-byte RuleCount,
+             * followed by that many (namelen:u8, name, valuelen:u8, value) entries.
+             * Previously this loop skipped RuleCount entirely and read strings with
+             * a 4-byte length prefix (the format used by the 'i' opcode), so the
+             * very first read consumed 2 bytes of RuleCount plus 2 bytes of the
+             * first rule's 1-byte length prefix as a bogus 4-byte length. That
+             * value is essentially always > kMaxStringLen, so readPascalString()
+             * bailed out immediately with an empty string and the loop stopped
+             * before parsing anything — leaving "Fetching rules…" shown forever
+             * since setRules() never got called with data. */
+            quint16 ruleCount = 0;
+            stream >> ruleCount;
+            for (quint16 i = 0; i < ruleCount && stream.status() == QDataStream::Ok; ++i) {
+                const QString key = readRuleString(stream);
+                const QString val = readRuleString(stream);
+                if (stream.status() != QDataStream::Ok)
                     break;
-                const QString val = readPascalString(stream);
                 si.rules.insert(key, val);
             }
 
@@ -402,6 +446,16 @@ void SampQuery::onTimeoutTick()
         const PendingQuery pq = m_pending.take(k);
         if (pq.opcode == 'i')
             emitOffline(pq.host, pq.port);
-        /* For 'r' timeouts we silently discard — rules are non-critical. */
+        else if (pq.opcode == 'r') {
+            /* Previously silently discarded, which left ServerPropertiesDialog
+             * stuck on "Fetching rules…" forever whenever a server doesn't
+             * reply to the 'r' query (old server, firewall, packet loss). Emit
+             * an empty result so the dialog can tell the user it gave up. */
+            ServerInfo si;
+            si.address      = pq.host;
+            si.port         = pq.port;
+            si.rulesQueried = true;
+            emit rulesReady(si);
+        }
     }
 }

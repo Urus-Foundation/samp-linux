@@ -151,6 +151,7 @@ void FavoritesManager::load()
         return;
     }
 
+    qDebug(lcFavorites) << "Loaded favorites.json schema version" << version;
     m_favorites = arrayToServers(root.value("favorites"));
     m_recent    = arrayToServers(root.value("recent"));
 }

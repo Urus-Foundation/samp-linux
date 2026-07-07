@@ -55,6 +55,7 @@ private:
     static QByteArray buildPacket(const QHostAddress &addr, quint16 port, char opcode);
     static QString    keyFor(const QString &host, quint16 port, char opcode);
     static QString    readPascalString(QDataStream &stream);
+    static QString    readRuleString(QDataStream &stream);
 
     void dispatchQuery(const QString &host, quint16 port,
                        const QHostAddress &resolved, char opcode);

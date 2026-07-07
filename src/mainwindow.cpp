@@ -1,6 +1,7 @@
 #include "mainwindow.h"
 #include "helper.h"
 
+#include <QFontDatabase>
 #include <QTabWidget>
 #include <QTableView>
 #include <QLineEdit>
@@ -123,6 +124,21 @@ QWidget *MainWindow::buildHeaderBar()
     auto *titleBox = new QVBoxLayout();
     auto *title    = new QLabel(tr("SA:MP Linux Launcher"), bar);
     title->setObjectName("AppTitle");
+
+    {  // Set title font
+        int fontId = QFontDatabase::addApplicationFont(":/fonts/diploma.ttf");
+        if (fontId != -1)
+        {
+            QString fontFamily = QFontDatabase::applicationFontFamilies(fontId).at(0);
+            QFont font(fontFamily);
+            title->setFont(font);
+        }
+        else
+        {
+            qDebug() << "fonts: Diploma not loaded";
+        }
+    }
+
     auto *subtitle = new QLabel(tr("Play GTA San Andreas Multiplayer on Linux"), bar);
     subtitle->setObjectName("AppSubtitle");
     titleBox->addWidget(title);
@@ -177,6 +193,20 @@ void MainWindow::setupProxy(QSortFilterProxyModel *proxy, ServerListModel *model
     proxy->setDynamicSortFilter(true);
 }
 
+// Build a search bar filter
+void MainWindow::buildFilterToolbar(QWidget *tab, QBoxLayout *toolbar)
+{
+    m_internet.filter = new QLineEdit(tab);
+    m_internet.filter->setPlaceholderText(tr("Filter by name, gamemode or address..."));
+    m_internet.filter->addAction(
+        getIcon(ICON_FILTER),
+        QLineEdit::LeadingPosition
+    );
+    connect(m_internet.filter, &QLineEdit::textChanged,
+            this, &MainWindow::onInternetFilterChanged);
+    toolbar->addWidget(m_internet.filter, 1);
+}
+
 QWidget *MainWindow::buildInternetTab()
 {
     auto *tab    = new QWidget(this);
@@ -185,21 +215,12 @@ QWidget *MainWindow::buildInternetTab()
 
     // Toolbar
     auto *toolbar = new QHBoxLayout();
-
-    m_internet.filter = new QLineEdit(tab);
-    m_internet.filter->setPlaceholderText(tr("Filter by name, gamemode or address..."));
-    connect(m_internet.filter, &QLineEdit::textChanged,
-            this, &MainWindow::onInternetFilterChanged);
-    toolbar->addWidget(m_internet.filter, 1);
+    buildFilterToolbar(tab, toolbar);
 
     m_internetRefreshBtn = new QPushButton(tr("Refresh List"), tab);
     connect(m_internetRefreshBtn, &QPushButton::clicked,
             this, &MainWindow::refreshInternetList);
     toolbar->addWidget(m_internetRefreshBtn);
-
-    auto *pingBtn = new QPushButton(tr("Ping All"), tab);
-    connect(pingBtn, &QPushButton::clicked, this, &MainWindow::requeryInternetTab);
-    toolbar->addWidget(pingBtn);
 
     auto *favBtn = new QPushButton(tr("Add to Favorites"), tab);
     connect(favBtn, &QPushButton::clicked, this, &MainWindow::addSelectedInternetToFavorites);
@@ -237,19 +258,11 @@ QWidget *MainWindow::buildFavoritesTab()
     // Toolbar
     auto *toolbar = new QHBoxLayout();
 
-    m_favorites.filter = new QLineEdit(tab);
-    m_favorites.filter->setPlaceholderText(tr("Filter favorites..."));
-    connect(m_favorites.filter, &QLineEdit::textChanged,
-            this, &MainWindow::onFavoritesFilterChanged);
-    toolbar->addWidget(m_favorites.filter, 1);
+    buildFilterToolbar(tab, toolbar);
 
     auto *addBtn = new QPushButton(tr("Add by IP..."), tab);
     connect(addBtn, &QPushButton::clicked, this, &MainWindow::addFavoriteManually);
     toolbar->addWidget(addBtn);
-
-    auto *pingBtn = new QPushButton(tr("Ping All"), tab);
-    connect(pingBtn, &QPushButton::clicked, this, &MainWindow::requeryFavoritesTab);
-    toolbar->addWidget(pingBtn);
 
     auto *removeBtn = new QPushButton(tr("Remove"), tab);
     removeBtn->setObjectName("DangerButton");
@@ -400,11 +413,9 @@ void MainWindow::onPingTimerTick()
     requeryTab(m_favorites);
 }
 
+
 void MainWindow::requeryTab(const ServerTabWidgets &tab)
 {
-    int total = 0;
-    m_statusLabel->setText(tr("Pinging servers..."));
-
     for (const ServerInfo &s : tab.model->all()) {
         int retry = 0;
         while (!s.online && retry < PING_MAX_RETRIES) {
@@ -414,13 +425,9 @@ void MainWindow::requeryTab(const ServerTabWidgets &tab)
             // or just timed out ping. The master list may not have the latest status,
             // so we always re-query.
             m_query->queryInfo(s.address, s.port);
-            m_statusLabel->setText(tr("Re-pinging %1...").arg(s.hostname.isEmpty() ? s.displayAddress() : s.hostname));
             retry++;
         }
-        total++;
     }
-
-    m_statusLabel->setText(tr("Successfully pinged %1 servers.").arg(total));
 }
 
 void MainWindow::requeryInternetTab()
@@ -489,6 +496,8 @@ void MainWindow::showServerContextMenu(const ServerTabWidgets &tab,
 
     addAction(tr("Connect"), getIcon(ICON_CONNECT),
                [this, info] { connectServer(info); });
+    addAction(tr("Refresh"), getIcon(ICON_REFRESH),
+               [this, info] { m_query->queryInfo(info.address, info.port); });
 
     menu.addSeparator();
     addAction(tr("Server Properties"), getIcon(ICON_SVR_PROPS),
@@ -695,11 +704,17 @@ void MainWindow::showServerProperties(const ServerInfo &info)
     ServerPropertiesDialog dlg(dialogInfo, ServerPropertiesDialog::Mode::Full, this);
 
     /* Wire rulesReady so the dialog is populated as soon as the UDP reply
-     * arrives (or immediately via queued invoke when served from cache). */
+     * arrives (or immediately via queued invoke when served from cache).
+     * Guard by port first, then address — result.address may be a resolved
+     * IP while info.address is the original hostname, so also accept when
+     * the port matches and the address is either equal or info.address
+     * resolves to result.address (handled by SampQuery storing pq.host). */
     QMetaObject::Connection rulesConn = connect(
         m_query, &SampQuery::rulesReady,
         &dlg, [&dlg, &info](const ServerInfo &result) {
-            if (result.address == info.address && result.port == info.port)
+            if (result.port == info.port &&
+                (result.address == info.address ||
+                 result.address == QHostAddress(info.address).toString()))
                 dlg.setRules(result.rules);
         });
 

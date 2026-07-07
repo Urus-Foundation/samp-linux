@@ -1,6 +1,6 @@
 * {
     outline: none;
-    font-family: "Segoe UI", "Noto Sans", sans-serif;
+    font-family: "Liberation Sans";
 }
 
 QWidget {
@@ -19,8 +19,8 @@ QMainWindow {
 }
 
 #AppTitle {
-    font-size: 16px;
-    font-weight: bold;
+    font-family: "Diploma";
+    font-size: 24px;
     color: #111111;
 }
 
@@ -104,14 +104,16 @@ QComboBox:focus {
     border: 1px solid #2f80ed;
 }
 
-QTableView {
+QTableView,
+QTreeView {
     background-color: #ffffff;
     alternate-background-color: #f8f8f8;
     gridline-color: #e3e3e3;
     border: 1px solid #d9d9d9;
 }
 
-QTableView::item {
+QTableView::item,
+QTreeView::item {
     padding: 4px 6px;
 }
 
@@ -122,7 +124,8 @@ QHeaderView::section {
     border: 1px solid #d9d9d9;
 }
 
-QTableView::item:selected {
+QTableView::item:selected,
+QTreeView::item::selected {
     background-color: #539aff;
     color: #111111;
 }

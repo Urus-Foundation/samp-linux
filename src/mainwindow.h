@@ -5,6 +5,7 @@
 
 #include "serverinfo.h"
 
+class QBoxLayout;
 class QTabWidget;
 class QTableView;
 class QLineEdit;
@@ -80,6 +81,9 @@ private:
     QWidget *buildHeaderBar();
     QWidget *buildInternetTab();
     QWidget *buildFavoritesTab();
+
+    // UI Component
+    void buildFilterToolbar(QWidget *tab, QBoxLayout *toolbar);
 
     // Tab widget helpers (reduce duplication between Internet / Favorites)
     void    setupTableView(QTableView *view, QSortFilterProxyModel *proxy);

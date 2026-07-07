@@ -113,8 +113,18 @@ QVariant ServerListModel::data(const QModelIndex &index, int role) const
     case Qt::ToolTipRole:
         if (col == ColLock)
             return s.passworded ? tr("Password protected") : tr("Open server");
-        if (col == ColName)
+        else if (col == ColName)
             return s.hostname;
+        else if (col == ColPlayers)
+            return (s.queried && s.online)
+                       ? tr("%1 of %2 players online").arg(s.players).arg(s.maxPlayers)
+                       : tr("Player count not yet known");
+        else if (col == ColPing)
+            return (s.queried && s.online && s.pingMs >= 0)
+                       ? tr("Ping: %1 ms").arg(s.pingMs)
+                       : tr("Ping not yet measured");
+        else if (col == ColAddress)
+            return s.displayAddress();
         return {};
 
     default:
